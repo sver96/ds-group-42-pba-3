@@ -1,0 +1,554 @@
+---
+title: "DS PBA3 Nursery"
+output: html_document
+date: "2024-05-11"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(e1071)
+
+```
+
+
+```{r}
+# Importing dataset
+
+data_nursery <- read.table("nursery.data", sep = ",", header = FALSE)
+
+colnames(data_nursery) <- c("parents", "has_nurs", "form", "children", "housing", "finance", "social", "health", "class")
+
+```
+
+```{r}
+set.seed(123)
+nursery_split <- initial_split(data_nursery, prop = 0.7)
+train <- training(nursery_split)
+test <- testing(nursery_split)
+
+```
+
+
+##Proportion NAs = 10
+
+```{r}
+# Introducing NAs at p = 10 randomly into all features
+
+set.seed(123)
+train_10 <- train
+n_rows <- nrow(train_10)
+prop_na <- 0.1
+
+# Loop for random NAs
+for (col_name in colnames(train_10)) {
+  n_na <- round(prop_na * n_rows)
+  na_indices <- sample(1:n_rows, size = n_na, replace = FALSE)
+  train[[col_name]][na_indices] <- NA
+}
+
+na_counts <- colSums(is.na(train))
+na_counts
+
+```
+
+```{r}
+# Imputing missing values in training p = 10
+
+mode_imputation_10 <- train_10
+
+nb_imputation_10 <- train_10
+
+getmode <- function(v) {
+   tabulated <- table(v)
+   modes <- names(tabulated)[tabulated == max(tabulated)]
+   return(modes)
+}
+
+# Get column names
+cols <- colnames(train)
+
+# Loop over all columns
+for (col in cols) {
+  # Mode imputation
+  mode_imputation_10[[col]][is.na(mode_imputation_10[[col]])] <- getmode(mode_imputation_10[[col]])
+  
+  # Naive Bayes for imputations
+  model_nb <- naiveBayes(as.formula(paste(col, "~ .")), data = nb_imputation_10)
+  missing_values <- which(is.na(nb_imputation_10[[col]]))
+  pred_values <- predict(model_nb, newdata = nb_imputation_10[missing_values, ])
+  nb_imputation_10[[col]][missing_values] <- pred_values
+}
+
+nb_imputation_10 <- nb_imputation_10 %>%
+  mutate(parents = case_when(
+    parents == 1 ~ "great_pret",
+    parents == 2 ~ "pretentious",
+    parents == 3 ~ "usual",
+    TRUE ~ as.character(parents)
+  ))
+
+nb_imputation_10 <- nb_imputation_10 %>%
+  mutate(has_nurs = case_when(
+    has_nurs == 1 ~ "critical",
+    has_nurs == 2 ~ "improper",
+    has_nurs == 3 ~ "less_proper",
+    has_nurs == 4 ~ "proper",
+    has_nurs == 5 ~ "very_crit",
+    TRUE ~ as.character(has_nurs)
+  ))
+
+nb_imputation_10 <- nb_imputation_10 %>%
+  mutate(form = case_when(
+    form == 2 ~ "completed",
+    form == 3 ~ "foster",
+    form == 4 ~ "incomplete",
+    TRUE ~ as.character(form)
+  ))
+
+nb_imputation_10 <- nb_imputation_10 %>%
+  mutate(housing = case_when(
+    housing == 1 ~ "convenient",
+    housing == 2 ~ "critical",
+    housing == 3 ~ "less_conv",
+    TRUE ~ as.character(housing)
+  ))
+
+nb_imputation_10 <- nb_imputation_10 %>%
+  mutate(finance = case_when(
+    finance == 1 ~ "convenient",
+    finance == 2 ~ "inconv",
+    TRUE ~ as.character(finance)
+  ))
+
+nb_imputation_10 <- nb_imputation_10 %>%
+  mutate(social = case_when(
+    social == 1 ~ "nonprob",
+    social == 2 ~ "problematic",
+    social == 3 ~ "slightly_prob",
+    TRUE ~ as.character(social)
+  ))
+
+nb_imputation_10 <- nb_imputation_10 %>%
+  mutate(health = case_when(
+    health == 1 ~ "not_recom",
+    health == 2 ~ "priority",
+    health == 3 ~ "recommended",
+    TRUE ~ as.character(health)
+  ))
+
+nb_imputation_10 <- nb_imputation_10 %>%
+  mutate(children = case_when(
+    children == 1 ~ "1",
+    children == 2 ~ "2",
+    children == 3 ~ "3",
+    children == 4 ~ "more",
+    TRUE ~ as.character(children)
+  ))
+
+nb_imputation_10 <- nb_imputation_10 %>%
+  mutate(class = case_when(
+    class == 1 ~ "not_recom",
+    class == 2 ~ "priority",
+    class == 3 ~ "recommended",
+    class == 4 ~ "spec_prior",
+    class == 5 ~ "very_recom",
+    TRUE ~ as.character(class)
+  ))
+
+# Check NA counts
+na_counts_mode <- colSums(is.na(mode_imputation_10))
+na_counts_nb <- colSums(is.na(nb_imputation_10))
+
+na_counts_mode
+na_counts_nb
+
+
+```
+
+```{r}
+# Visualising results from imputations on Class varaible for p = 10
+
+before_imputation <- ggplot(data_nursery, aes(x = class)) +
+  geom_bar(stat = "count", fill = "skyblue") + 
+  theme_minimal() +
+  labs(title = "Histogram of Class before Imputation", x = "Class", y = "Number of Instances") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+before_imputation
+
+after_mode_imputation <- ggplot(mode_imputation_10, aes(x = class)) +
+  geom_bar(stat = "count", fill = "pink") + 
+  theme_minimal() +
+  labs(title = "Histogram of Class After Mode Imputation", x = "Class", y = "Number of Instances") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+after_mode_imputation
+
+after_nb_imputation <- ggplot(nb_imputation_10, aes(x = class)) +
+  geom_bar(stat = "count", fill = "yellow") + 
+  theme_minimal() +
+  labs(title = "Histogram of Class After Naive Bayes Imputation", x = "Class", y = "Number of Instances") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+after_nb_imputation
+```
+
+
+## Proportion NAs = 40
+
+```{r}
+# Introducing NAs at p = 40 randomly into all features
+
+set.seed(123)
+train_40 <- train
+n_rows <- nrow(train_40)
+prop_na <- 0.4
+
+for (col_name in colnames(train_40)) {
+  n_na <- round(prop_na * n_rows)
+  na_indices <- sample(1:n_rows, size = n_na, replace = FALSE)
+  train[[col_name]][na_indices] <- NA
+}
+
+na_counts <- colSums(is.na(train))
+na_counts
+
+```
+
+```{r}
+# Imputing missing values in training p = 40
+
+mode_imputation_40 <- train_40
+
+nb_imputation_40 <- train_40
+
+getmode <- function(v) {
+   tabulated <- table(v)
+   modes <- names(tabulated)[tabulated == max(tabulated)]
+   return(modes)
+}
+
+# Get column names
+cols <- colnames(train)
+
+# Loop over all columns
+for (col in cols) {
+  # Mode imputation
+  mode_imputation_40[[col]][is.na(mode_imputation_40[[col]])] <- getmode(mode_imputation_40[[col]])
+  
+  # Naive Bayes for imputations
+  model_nb <- naiveBayes(as.formula(paste(col, "~ .")), data = nb_imputation_40)
+  missing_values <- which(is.na(nb_imputation_40[[col]]))
+  pred_values <- predict(model_nb, newdata = nb_imputation_40[missing_values, ])
+  nb_imputation_40[[col]][missing_values] <- pred_values
+}
+
+nb_imputation_40 <- nb_imputation_40 %>%
+  mutate(parents = case_when(
+    parents == 1 ~ "great_pret",
+    parents == 2 ~ "pretentious",
+    parents == 3 ~ "usual",
+    TRUE ~ as.character(parents)
+  ))
+
+nb_imputation_40 <- nb_imputation_40 %>%
+  mutate(has_nurs = case_when(
+    has_nurs == 1 ~ "critical",
+    has_nurs == 2 ~ "improper",
+    has_nurs == 3 ~ "less_proper",
+    has_nurs == 4 ~ "proper",
+    has_nurs == 5 ~ "very_crit",
+    TRUE ~ as.character(has_nurs)
+  ))
+
+nb_imputation_40 <- nb_imputation_40 %>%
+  mutate(form = case_when(
+    form == 2 ~ "completed",
+    form == 3 ~ "foster",
+    form == 4 ~ "incomplete",
+    TRUE ~ as.character(form)
+  ))
+
+nb_imputation_40 <- nb_imputation_40 %>%
+  mutate(housing = case_when(
+    housing == 1 ~ "convenient",
+    housing == 2 ~ "critical",
+    housing == 3 ~ "less_conv",
+    TRUE ~ as.character(housing)
+  ))
+
+nb_imputation_40 <- nb_imputation_40 %>%
+  mutate(finance = case_when(
+    finance == 1 ~ "convenient",
+    finance == 2 ~ "inconv",
+    TRUE ~ as.character(finance)
+  ))
+
+nb_imputation_40 <- nb_imputation_40 %>%
+  mutate(social = case_when(
+    social == 1 ~ "nonprob",
+    social == 2 ~ "problematic",
+    social == 3 ~ "slightly_prob",
+    TRUE ~ as.character(social)
+  ))
+
+nb_imputation_40 <- nb_imputation_40 %>%
+  mutate(health = case_when(
+    health == 1 ~ "not_recom",
+    health == 2 ~ "priority",
+    health == 3 ~ "recommended",
+    TRUE ~ as.character(health)
+  ))
+
+nb_imputation_40 <- nb_imputation_40 %>%
+  mutate(children = case_when(
+    children == 1 ~ "1",
+    children == 2 ~ "2",
+    children == 3 ~ "3",
+    children == 4 ~ "more",
+    TRUE ~ as.character(children)
+  ))
+
+nb_imputation_40 <- nb_imputation_40 %>%
+  mutate(class = case_when(
+    class == 1 ~ "not_recom",
+    class == 2 ~ "priority",
+    class == 3 ~ "recommended",
+    class == 4 ~ "spec_prior",
+    class == 5 ~ "very_recom",
+    TRUE ~ as.character(class)
+  ))
+
+
+# Check NA counts
+na_counts_mode <- colSums(is.na(mode_imputation_40))
+na_counts_nb <- colSums(is.na(nb_imputation_40))
+
+na_counts_mode
+na_counts_nb
+
+
+```
+
+```{r}
+# Visualising results from imputations on Class varaible for p = 40
+
+before_imputation <- ggplot(data_nursery, aes(x = class)) +
+  geom_bar(stat = "count", fill = "skyblue") + 
+  theme_minimal() +
+  labs(title = "Histogram of Class before Imputation", x = "Class", y = "Number of Instances") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+before_imputation
+
+after_mode_imputation <- ggplot(mode_imputation_40, aes(x = class)) +
+  geom_bar(stat = "count", fill = "pink") + 
+  theme_minimal() +
+  labs(title = "Histogram of Class After Mode Imputation", x = "Class", y = "Number of Instances") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+after_mode_imputation
+
+after_nb_imputation <- ggplot(nb_imputation_40, aes(x = class)) +
+  geom_bar(stat = "count", fill = "yellow") + 
+  theme_minimal() +
+  labs(title = "Histogram of Class After Naive Bayes Imputation", x = "Class", y = "Number of Instances") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+after_nb_imputation
+```
+
+
+## Proportion NAs = 70
+
+```{r}
+# Introducing NAs at p = 70 randomly into all features
+
+set.seed(123)
+train_70 <- train
+n_rows <- nrow(train_70)
+prop_na <- 0.7
+
+for (col_name in colnames(train_70)) {
+  n_na <- round(prop_na * n_rows)
+  na_indices <- sample(1:n_rows, size = n_na, replace = FALSE)
+  train[[col_name]][na_indices] <- NA
+}
+
+na_counts <- colSums(is.na(train))
+na_counts
+
+```
+
+```{r}
+# Imputing missing values in training p = 70
+
+mode_imputation_70 <- train_70
+
+nb_imputation_70 <- train_70
+
+getmode <- function(v) {
+   tabulated <- table(v)
+   modes <- names(tabulated)[tabulated == max(tabulated)]
+   return(modes)
+}
+
+# Get column names
+cols <- colnames(train)
+
+# Loop over all columns
+for (col in cols) {
+  # Mode imputation
+  mode_imputation_70[[col]][is.na(mode_imputation_70[[col]])] <- getmode(mode_imputation_70[[col]])
+  
+  # Naive Bayes for imputations
+  model_nb <- naiveBayes(as.formula(paste(col, "~ .")), data = nb_imputation_70)
+  missing_values <- which(is.na(nb_imputation_70[[col]]))
+  pred_values <- predict(model_nb, newdata = nb_imputation_70[missing_values, ])
+  nb_imputation_70[[col]][missing_values] <- pred_values
+}
+
+nb_imputation_70 <- nb_imputation_70 %>%
+  mutate(parents = case_when(
+    parents == 1 ~ "great_pret",
+    parents == 2 ~ "pretentious",
+    parents == 3 ~ "usual",
+    TRUE ~ as.character(parents)
+  ))
+
+nb_imputation_70 <- nb_imputation_70 %>%
+  mutate(has_nurs = case_when(
+    has_nurs == 1 ~ "critical",
+    has_nurs == 2 ~ "improper",
+    has_nurs == 3 ~ "less_proper",
+    has_nurs == 4 ~ "proper",
+    has_nurs == 5 ~ "very_crit",
+    TRUE ~ as.character(has_nurs)
+  ))
+
+nb_imputation_70 <- nb_imputation_70 %>%
+  mutate(form = case_when(
+    form == 2 ~ "completed",
+    form == 3 ~ "foster",
+    form == 4 ~ "incomplete",
+    TRUE ~ as.character(form)
+  ))
+
+nb_imputation_70 <- nb_imputation_70 %>%
+  mutate(housing = case_when(
+    housing == 1 ~ "convenient",
+    housing == 2 ~ "critical",
+    housing == 3 ~ "less_conv",
+    TRUE ~ as.character(housing)
+  ))
+
+nb_imputation_70 <- nb_imputation_70 %>%
+  mutate(finance = case_when(
+    finance == 1 ~ "convenient",
+    finance == 2 ~ "inconv",
+    TRUE ~ as.character(finance)
+  ))
+
+nb_imputation_70 <- nb_imputation_70 %>%
+  mutate(social = case_when(
+    social == 1 ~ "nonprob",
+    social == 2 ~ "problematic",
+    social == 3 ~ "slightly_prob",
+    TRUE ~ as.character(social)
+  ))
+
+nb_imputation_70 <- nb_imputation_70 %>%
+  mutate(health = case_when(
+    health == 1 ~ "not_recom",
+    health == 2 ~ "priority",
+    health == 3 ~ "recommended",
+    TRUE ~ as.character(health)
+  ))
+
+nb_imputation_70 <- nb_imputation_70 %>%
+  mutate(children = case_when(
+    children == 1 ~ "1",
+    children == 2 ~ "2",
+    children == 3 ~ "3",
+    children == 4 ~ "more",
+    TRUE ~ as.character(children)
+  ))
+
+nb_imputation_70 <- nb_imputation_70 %>%
+  mutate(class = case_when(
+    class == 1 ~ "not_recom",
+    class == 2 ~ "priority",
+    class == 3 ~ "recommended",
+    class == 4 ~ "spec_prior",
+    class == 5 ~ "very_recom",
+    TRUE ~ as.character(class)
+  ))
+
+
+# Check NA counts
+na_counts_mode <- colSums(is.na(mode_imputation_70))
+na_counts_nb <- colSums(is.na(nb_imputation_70))
+
+na_counts_mode
+na_counts_nb
+
+
+```
+
+```{r}
+# Visualising results from imputations on Class varaible for p = 70
+
+before_imputation <- ggplot(data_nursery, aes(x = class)) +
+  geom_bar(stat = "count", fill = "skyblue") + 
+  theme_minimal() +
+  labs(title = "Histogram of Class before Imputation", x = "Class", y = "Number of Instances") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+before_imputation
+
+after_mode_imputation <- ggplot(mode_imputation_70, aes(x = class)) +
+  geom_bar(stat = "count", fill = "pink") + 
+  theme_minimal() +
+  labs(title = "Histogram of Class After Mode Imputation", x = "Class", y = "Number of Instances") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+after_mode_imputation
+
+after_nb_imputation <- ggplot(nb_imputation_70, aes(x = class)) +
+  geom_bar(stat = "count", fill = "yellow") + 
+  theme_minimal() +
+  labs(title = "Histogram of Class After Naive Bayes Imputation", x = "Class", y = "Number of Instances") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+after_nb_imputation
+```
+
+##Write CSVs
+
+```{r}
+write.csv(train, file = "original_training_set_no_na.csv")
+
+write.csv(test, file = "original_testing_set_no_na.csv")
+
+write.csv(mode_imputation_10, file = "mode_imputation_10.csv")
+
+write.csv(nb_imputation_10, file = "nb_imputation_10.csv")
+
+write.csv(mode_imputation_40, file = "mode_imputation_40.csv")
+
+write.csv(nb_imputation_40, file = "nb_imputation_40.csv")
+
+write.csv(mode_imputation_70, file = "mode_imputation_70.csv")
+
+write.csv(nb_imputation_70, file = "nb_imputation_70.csv")
+
+```
