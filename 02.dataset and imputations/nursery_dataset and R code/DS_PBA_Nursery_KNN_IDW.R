@@ -274,7 +274,7 @@ m2
 
 #Make predictions on mode 10 and Nursery testing data
 
-train_predictions <- knn(train= mode_data.subset_train, test= Nursery_data.subset_train, cl= mode_data.subset_train_target, k=95)
+train_predictions <- knn(train= mode_data.subset_train, test= Nursery_data.subset_train, cl= mode_data.subset_train$class, k=95)
 test_predictions <- knn(train= mode_data.subset_train, test= Nursery_test.subset_test, cl= mode_data.subset_train_target, k=95)
 
 #Calculate evaluation metrics for mode 10 training data  
