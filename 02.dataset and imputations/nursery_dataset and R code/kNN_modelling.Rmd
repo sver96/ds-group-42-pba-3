@@ -1,0 +1,61 @@
+---
+title: "kNN modelling"
+author: "Isabel de Waal [20805055]"
+date: "`r Sys.Date()`"
+output: html_document
+---
+### Setup
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r }
+
+
+
+```
+
+```{r }
+
+
+
+```
+
+```{r }
+
+
+
+```
+
+```{r }
+
+
+
+```
+
+```{r }
+
+
+
+```
+
+```{r }
+
+
+
+```
+
+```{r }
+
+
+
+```
+
+```{r }
+
+
+
+```
+
