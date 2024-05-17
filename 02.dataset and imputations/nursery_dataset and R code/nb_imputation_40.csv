@@ -3468,7 +3468,7 @@
 "3467","usual","improper","incomplete","2","less_conv","convenient","nonprob","recommended","priority"
 "3468","usual","very_crit","incomplete","2","critical","convenient","problematic","recommended","priority"
 "3469","usual","critical","complete","more","critical","inconv","nonprob","priority","priority"
-"3470","usual","proper","completed","more","convenient","convenient","slightly_prob","recommended","recommended"
+"3470","usual","proper","completed","more","convenient","convenient","slightly_prob","recommended","recommend"
 "3471","usual","improper","complete","2","convenient","convenient","slightly_prob","priority","priority"
 "3472","pretentious","improper","completed","2","critical","inconv","slightly_prob","not_recom","not_recom"
 "3473","usual","improper","complete","3","critical","convenient","slightly_prob","recommended","priority"
