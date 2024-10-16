@@ -1,0 +1,161 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "provenance": [],
+      "authorship_tag": "ABX9TyOMfcNSrkgcgj+IB+hOYj/r",
+      "include_colab_link": true
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    },
+    "language_info": {
+      "name": "python"
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "view-in-github",
+        "colab_type": "text"
+      },
+      "source": [
+        "<a href=\"https://colab.research.google.com/github/sver96/ds-group-42-pba-3/blob/main/Question%204\" target=\"_parent\"><img src=\"https://colab.research.google.com/assets/colab-badge.svg\" alt=\"Open In Colab\"/></a>"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 1,
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "Tyx4X8w9pH5Y",
+        "outputId": "568b493d-bc56-40cf-b1ad-7c4558cb4db4"
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "[nltk_data] Downloading package stopwords to /root/nltk_data...\n",
+            "[nltk_data]   Unzipping corpora/stopwords.zip.\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Final Result: [('cat', 1), ('dog', 1), ('log', 1), ('mat', 1), ('sat', 2)]\n"
+          ]
+        }
+      ],
+      "source": [
+        "import re\n",
+        "from collections import defaultdict\n",
+        "from itertools import groupby\n",
+        "from operator import itemgetter\n",
+        "import nltk\n",
+        "nltk.download('stopwords')\n",
+        "from nltk.corpus import stopwords\n",
+        "\n",
+        "# Cleaner function to clean and tokenize the text\n",
+        "def cleaner(line):\n",
+        "    \"\"\"\n",
+        "    Clean the text, remove non-alphabetical characters, and filter stopwords.\n",
+        "    \"\"\"\n",
+        "    # Lowercase and find all words\n",
+        "    words = re.findall(r'[a-z\\']+', line.lower())\n",
+        "\n",
+        "    # Filter out stopwords\n",
+        "    filtered_words = [\n",
+        "        word.replace(\"'\", '')  # remove apostrophes\n",
+        "        for word in words if word not in stopwords.words('english') and word != ''\n",
+        "    ]\n",
+        "\n",
+        "    return filtered_words\n",
+        "\n",
+        "# Mapper function\n",
+        "def mapper(key, value):\n",
+        "    \"\"\"\n",
+        "    User-defined mapper function.\n",
+        "    :param key: Document identifier (e.g., file name)\n",
+        "    :param value: Document content (text)\n",
+        "    \"\"\"\n",
+        "    # Clean and split the document into words\n",
+        "    words = cleaner(value)\n",
+        "\n",
+        "    # Emit (word, 1) for each word\n",
+        "    for word in words:\n",
+        "        yield (word, 1)\n",
+        "\n",
+        "# Reducer function\n",
+        "def reducer(key, values):\n",
+        "    \"\"\"\n",
+        "    User-defined reducer function.\n",
+        "    :param key: A word\n",
+        "    :param values: List of counts associated with the word\n",
+        "    \"\"\"\n",
+        "    # Sum up all the counts for the word\n",
+        "    total_count = sum(values)\n",
+        "\n",
+        "    # Emit (word, total_count)\n",
+        "    yield (key, total_count)\n",
+        "\n",
+        "# Function to simulate the intermediate sort and grouping\n",
+        "def intermediate_sort(data):\n",
+        "    \"\"\"\n",
+        "    Sort and group by key (word).\n",
+        "    :param data: List of (key, value) tuples\n",
+        "    :return: List of (key, [values]) tuples, where values are aggregated\n",
+        "    \"\"\"\n",
+        "    data = sorted(data)\n",
+        "    return [(k, list(tuple(zip(*g))[1])) for k, g in groupby(data, itemgetter(0))]\n",
+        "\n",
+        "# Function to simulate the entire MapReduce process\n",
+        "def run(sources_dict):\n",
+        "    \"\"\"\n",
+        "    Simulates the MapReduce process by applying the mapper and reducer functions.\n",
+        "    :param sources_dict: Dictionary where key is document id, and value is file path.\n",
+        "    :return: The final reduced result as a list of (word, total_count) pairs.\n",
+        "    \"\"\"\n",
+        "    map_result = []\n",
+        "    reduce_result = []\n",
+        "\n",
+        "    # Apply the mapper function to each document\n",
+        "    for doc_id, file_path in sources_dict.items():\n",
+        "        with open(file_path, 'r') as f:\n",
+        "            map_result += list(mapper(doc_id, f.read()))\n",
+        "\n",
+        "    # Sort and group intermediate results by key (word)\n",
+        "    intermediate_result = intermediate_sort(map_result)\n",
+        "\n",
+        "    # Apply the reducer function to each grouped result\n",
+        "    for word, counts in intermediate_result:\n",
+        "        reduce_result += list(reducer(word, counts))\n",
+        "\n",
+        "    return map_result, intermediate_result, reduce_result\n",
+        "\n",
+        "# Create test input files for this example\n",
+        "!mkdir -p input/\n",
+        "!echo -e 'The cat sat on the mat' > input/d1.txt\n",
+        "!echo -e 'The dog sat on the log' > input/d2.txt\n",
+        "\n",
+        "# Define the sources_dict variable\n",
+        "sources_dict = {\n",
+        "    'D1': 'input/d1.txt',  # document 1\n",
+        "    'D2': 'input/d2.txt'   # document 2\n",
+        "}\n",
+        "\n",
+        "# Run the MapReduce process on the sample files\n",
+        "map_result, intermediate_result, final_result = run(sources_dict)\n",
+        "\n",
+        "# Display the final reduced result\n",
+        "print(\"Final Result:\", final_result)"
+      ]
+    }
+  ]
+}
